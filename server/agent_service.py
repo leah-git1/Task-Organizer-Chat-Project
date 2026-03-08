@@ -1,11 +1,11 @@
 import json
 import os
-import openai
+from openai import OpenAI
 from dotenv import load_dotenv
 from todo_service import get_tasks, add_task, update_task, delete_task
 
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 FUNCTIONS = [
     {
@@ -69,8 +69,8 @@ FUNCTIONS = [
 ]
 
 def agent(query: str) -> str:
-    first_response = openai.ChatCompletion.create(
-        model="gpt-4.1",
+    first_response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
         messages=[
             {
                 "role": "system",
@@ -85,13 +85,13 @@ def agent(query: str) -> str:
         function_call="auto"
     )
 
-    message = first_response["choices"][0]["message"]
+    message = first_response.choices[0].message
 
-    if "function_call" not in message:
-        return message["content"]
+    if not message.function_call:
+        return message.content
 
-    func_name = message["function_call"]["name"]
-    args = json.loads(message["function_call"]["arguments"])
+    func_name = message.function_call.name
+    args = json.loads(message.function_call.arguments)
 
     if func_name == "get_tasks":
         result = get_tasks(**args)
@@ -108,11 +108,11 @@ def agent(query: str) -> str:
     else:
         result = "Unknown function"
 
-    second_response = openai.ChatCompletion.create(
-        model="gpt-4.1",
+    second_response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "user", "content": query},
-            message,
+            message.model_dump(),
             {
                 "role": "function",
                 "name": func_name,
@@ -121,4 +121,4 @@ def agent(query: str) -> str:
         ]
     )
 
-    return second_response["choices"][0]["message"]["content"]
+    return second_response.choices[0].message.content
